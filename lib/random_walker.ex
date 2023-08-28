@@ -27,9 +27,9 @@ defmodule RandomWalker do
   # API
 
   @spec start_link([opt()]) :: {:ok, pid()}
-  def start_link(opts \\ []) do
+  def start_link(opts \\ [name: :random_walker]) do
     name = opts[:name]
-    GenServer.start_link(__MODULE__, opts, name: {:global, name})
+    GenServer.start_link(__MODULE__, opts, [name: {:global, name}])
   end
 
   @spec register(RandomWalker) :: :ok
