@@ -28,7 +28,8 @@ defmodule RandomWalker do
 
   @spec start_link([opt()]) :: {:ok, pid()}
   def start_link(opts \\ []) do
-    GenServer.start_link(__MODULE__, opts, name: opts[:name])
+    name = opts[:name]
+    GenServer.start_link(__MODULE__, opts, name: {:global, name})
   end
 
   @spec register(RandomWalker) :: :ok
@@ -52,7 +53,6 @@ defmodule RandomWalker do
   @spec init([opt()]) :: {:ok, t()}
   def init(opts) do
     state = struct(RandomWalker, opts)
-    :global.register_name(state.name, self())
     schedule_action(state.interval)
     Logger.info("#{state.name} starting, state = #{inspect state}")
     {:ok, %{state | number: state.start}}
@@ -76,7 +76,7 @@ defmodule RandomWalker do
     %{name: name, number: n, clients: clients} = state
     new_n = n + Enum.random(-1..1)
     Logger.debug("number is #{new_n}")
-    MapSet.to_list(clients) |> Enum.each(fn client -> send(client, {:name, :number, new_n}) end)
+    MapSet.to_list(clients) |> Enum.each(fn client -> send(client, {name, :number, new_n}) end)
     schedule_action(state.interval)
     {:noreply, %{state | number: new_n}}
   end
