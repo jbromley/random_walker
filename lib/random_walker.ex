@@ -42,6 +42,11 @@ defmodule RandomWalker do
     GenServer.call(server, :unregister)
   end
 
+  @spec log(RandomWalker) :: :ok
+  def log(server) do
+    GenServer.call(server, :log)
+  end
+
   @spec stop(RandomWalker) :: :ok 
   def stop(server) do
     GenServer.stop(server, :normal)
@@ -50,7 +55,7 @@ defmodule RandomWalker do
   # Implementation
 
   @impl GenServer
-  @spec init([opt()]) :: {:ok, t()}
+  @spec init([opt()]) :: {:ok | {:ok, t()}, t()}
   def init(opts) do
     state = struct(RandomWalker, opts)
     schedule_action(state.interval)
@@ -68,6 +73,11 @@ defmodule RandomWalker do
   def handle_call(:unregister, {pid, _} = _from, state) do
     Logger.debug("#{state.name} removing client #{inspect pid}")
     {:reply, :ok, %{state | clients: MapSet.delete(state.clients, pid)}}
+  end
+
+  def handle_call{:log, _from, state} do
+    Logger.info("#{inspect state}")
+    {:reply, {:ok, state}, state}
   end
 
   @impl GenServer
