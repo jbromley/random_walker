@@ -75,7 +75,7 @@ defmodule RandomWalker do
     {:reply, :ok, %{state | clients: MapSet.delete(state.clients, pid)}}
   end
 
-  def handle_call{:log, _from, state} do
+  def handle_call(:log, _from, state) do
     Logger.info("#{inspect state}")
     {:reply, {:ok, state}, state}
   end
