@@ -1,12 +1,18 @@
 defmodule RandomWalker.Client do
   @moduledoc """
   `RandomWalker.Client` is a client for the `RandomWalker`
+
+  This is intended to be a simple demo of using a `GenServer` running on
+  another node. As such, it has the following limitations.
+
+  * It can only connect to one server at a time
+  * Servers are not monitored. If they crash, this client has no idea.
   """
   use GenServer
   require Logger 
   
   defstruct name: :random_walker_client,
-            server_name: :random_walker,
+            server: nil,
             step: 0,
             number: 0,
             increments: 0,
@@ -15,7 +21,7 @@ defmodule RandomWalker.Client do
 
   @type t :: %__MODULE__{
     name: atom(),
-    server_name: atom(),
+    server: pid(),
     step: non_neg_integer(),
     number: integer(),
     increments: non_neg_integer(),
@@ -39,9 +45,9 @@ defmodule RandomWalker.Client do
     GenServer.call(client, {:connect, server})
   end
 
-  @spec disconnect(RandomWalker.Client, atom()) :: :ok
-  def disconnect(client, server) do
-    GenServer.call(client, {:disconnect, server})
+  @spec disconnect(RandomWalker.Client) :: :ok
+  def disconnect(client) do
+    GenServer.call(client, :disconnect)
   end
 
   @spec stop(RandomWalker.Client) :: :ok 
@@ -62,28 +68,44 @@ defmodule RandomWalker.Client do
   @impl GenServer
   @spec handle_call(term(), GenServer.from(), t()) :: {:reply, :ok, t()}
   def handle_call({:connect, server}, _from, state) do
-    server_pid = :global.whereis_name(server)
-    result = RandomWalker.register(server_pid)
-    {:reply, result, state}
+    %{server: server_pid} = state
+    case server_pid do
+      nil ->
+        server_pid = :global.whereis_name(server)
+        result = RandomWalker.register(server_pid)
+        {:reply, result, %{state | server: server_pid}}
+      _pid ->
+        {:reply, {:error, :already_connected}, state}
+    end
   end
 
-  def handle_call({:unregister, server}, _from, state) do
-    server_pid = :global.whereis_name(server)
-    result = RandomWalker.unregister(server_pid)
-    {:reply, result, state}
+  def handle_call(:disconnect, _from, state) do
+    %{server: server_pid} = state
+    case server_pid do
+      nil ->
+        result = {:error, :not_connected}
+        {:reply, result, %{state | server: nil}}
+      pid ->
+        result = RandomWalker.unregister(pid)
+        {:reply, result, %{state | server: nil}}
+    end
+    
   end
 
   @impl GenServer
   @spec handle_info(term(), t()) :: {:noreply, t()}
   def handle_info({:random_walk, _name, step, number}, state) do
     state = update_state(state, step, number)
-    Logger.info(":random_walk #{state}")
+    Logger.info("#{state.name} step #{state.step} n=#{state.number} ↓ #{state.decrements} → #{state.zeros} ↑ #{state.increments}")
     {:noreply, state}
   end
 
   @impl GenServer
   def terminate(reason, state) do
-    %{name: name} = state
+    %{name: name, server: server_pid} = state
+    if not is_nil(server_pid) do
+      RandomWalker.unregister(server_pid)
+    end
     Logger.info("#{name} stopping, reason #{reason}")
   end
 
@@ -99,6 +121,9 @@ defmodule RandomWalker.Client do
         %{state | step: step, number: number, zeros: z + 1}
       1 ->
         %{state | step: step, number: number, increments: i + 1}
+      _ ->
+        # First messages we've received, don't calculate increments/decrements.
+        %{state | step: step, number: number}
     end
   end
 end
