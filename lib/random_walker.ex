@@ -9,6 +9,7 @@ defmodule RandomWalker do
   defstruct name: :random_walker,
             interval: 1_000,
             start: 0,
+            step: 0,
             number: 0,
             clients: MapSet.new()
 
@@ -16,6 +17,8 @@ defmodule RandomWalker do
     name: atom(),
     interval: non_neg_integer(),
     start: integer(),
+    step: non_neg_integer(),
+    number: integer(),
     clients: MapSet.t(pid())
   }
 
@@ -83,12 +86,13 @@ defmodule RandomWalker do
   @impl GenServer
   @spec handle_info(term(), t()) :: {:noreply, t()}
   def handle_info(:generate, state) do
-    %{name: name, number: n, clients: clients} = state
-    new_n = n + Enum.random(-1..1)
-    Logger.debug("number is #{new_n}")
-    MapSet.to_list(clients) |> Enum.each(fn client -> send(client, {name, :number, new_n}) end)
+    %{name: name, step: step, number: n, clients: clients} = state
+    new_step = step + 1
+    new_number = n + Enum.random(-1..1)
+    Logger.debug("step #{new_step} number = #{new_number}")
+    MapSet.to_list(clients) |> Enum.each(fn client -> send(client, {:random_walk, name, new_step, new_number}) end)
     schedule_action(state.interval)
-    {:noreply, %{state | number: new_n}}
+    {:noreply, %{state | step: new_step, number: new_number}}
   end
 
   # Private functions
