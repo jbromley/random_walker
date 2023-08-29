@@ -7,6 +7,8 @@ defmodule RandomWalker.Client do
   
   defstruct name: :random_walker_client,
             server_name: :random_walker,
+            step: 0,
+            number: 0,
             increments: 0,
             zeros: 0,
             decrements: 0
@@ -14,6 +16,8 @@ defmodule RandomWalker.Client do
   @type t :: %__MODULE__{
     name: atom(),
     server_name: atom(),
+    step: non_neg_integer(),
+    number: integer(),
     increments: non_neg_integer(),
     zeros: non_neg_integer(),
     decrements: non_neg_integer()
@@ -57,25 +61,44 @@ defmodule RandomWalker.Client do
 
   @impl GenServer
   @spec handle_call(term(), GenServer.from(), t()) :: {:reply, :ok, t()}
-  def handle_call({:connect, server}, {pid, _} = _from, state) do
-    # TODO: connect to a RandomWalker server.
+  def handle_call({:connect, server}, _from, state) do
+    server_pid = :global.whereis_name(server)
+    result = RandomWalker.register(server_pid)
+    {:reply, result, state}
   end
 
-  def handle_call({:unregister, server}, {pid, _} = _from, state) do
-    Logger.debug("#{state.name} removing client #{inspect pid}")
-    # TODO: disconnect from a RandomWalker server  
+  def handle_call({:unregister, server}, _from, state) do
+    server_pid = :global.whereis_name(server)
+    result = RandomWalker.unregister(server_pid)
+    {:reply, result, state}
   end
 
   @impl GenServer
   @spec handle_info(term(), t()) :: {:noreply, t()}
-  def handle_info(:generate, state) do
-    # TODO: Handle receiving messages from the RandomWalker server.
-    # {:noreply, %{state | number: new_n}}
+  def handle_info({:random_walk, _name, step, number}, state) do
+    state = update_state(state, step, number)
+    Logger.info(":random_walk #{state}")
+    {:noreply, state}
   end
 
   @impl GenServer
   def terminate(reason, state) do
     %{name: name} = state
     Logger.info("#{name} stopping, reason #{reason}")
+  end
+
+# Private 
+
+  @spec update_state(t(), non_neg_integer(), integer()) :: t()
+  defp update_state(state, step, number) do
+    %{number: last_number, decrements: d, zeros: z, increments: i} = state
+    case number - last_number do
+      -1 ->
+        %{state | step: step, number: number, decrements: d + 1}
+      0 ->
+        %{state | step: step, number: number, zeros: z + 1}
+      1 ->
+        %{state | step: step, number: number, increments: i + 1}
+    end
   end
 end
